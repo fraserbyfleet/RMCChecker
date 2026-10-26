@@ -204,32 +204,35 @@ class CCLServer(Server):
     @classmethod
     def load_ccl_servers(cls, file_path):
 
-        df = pd.read_csv(file_path, header=None)
-
-        servers = []
-
-        # Find the Job Details header row
+        # Find the line that contains the JobId header
         start_row = None
 
-        for idx, row in df.iterrows():
-
-            if str(row.iloc[0]).strip() == "JobId":
-                start_row = idx + 1
-                break
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            for idx, line in enumerate(f):
+                if line.startswith('"JobId"') or line.startswith("JobId"):
+                    start_row = idx
+                    break
 
         if start_row is None:
             raise ValueError("Could not find Job Details section")
 
-        for _, row in df.iloc[start_row:].iterrows():
+        # Load only the Job Details section
+        df = pd.read_csv(
+            file_path,
+            skiprows=start_row,
+            engine="python"
+        )
 
-            # Stop when the SQL section starts
+        servers = []
+
+        for _, row in df.iterrows():
+
             first_column = str(row.iloc[0]).strip()
 
             if first_column == "SQL and Sybase Databases":
-                #print("Reached SQL and Sybase Databases section. Stopping.")
                 break
 
-            server_name = row.iloc[1]  # Column B (Client)
+            server_name = row.iloc[1]
 
             if pd.isna(server_name):
                 continue
@@ -239,14 +242,11 @@ class CCLServer(Server):
             if not server_name:
                 continue
 
-            server = cls(
-                name=server_name
-            )
+            server = cls(name=server_name)
 
-            j_value = row.iloc[9]
-            k_value = row.iloc[10]
+            j_value = row.iloc[9] if len(row) > 9 else 0
+            k_value = row.iloc[10] if len(row) > 10 else 0
 
-            # Treat blanks and non-numeric values as 0
             try:
                 j_value = 0 if pd.isna(j_value) else float(j_value)
             except (ValueError, TypeError):
@@ -257,20 +257,11 @@ class CCLServer(Server):
             except (ValueError, TypeError):
                 k_value = 0
 
-            if j_value != 0 or k_value != 0:
-                server.status = "Failed"
-                # print(
-                #     f"Failed job. Server: {server_name} "
-                #     f"(J={j_value}, K={k_value})"
-                # )
-            else:
-                server.status = "Success"
-                #print(f"Successful job. Server: {server_name}")
+            server.status = "Failed" if j_value != 0 or k_value != 0 else "Success"
 
             servers.append(server)
 
         print(f"Loaded {len(servers)} CCL servers")
-
         return servers
 
 
