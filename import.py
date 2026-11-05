@@ -67,6 +67,7 @@ if azureReport:
             azureReport
         )
 
+
 if cclReport:
 
     ccl_servers = (
