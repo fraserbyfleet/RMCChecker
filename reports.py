@@ -37,3 +37,7 @@ def find_issues(rmc_servers, backedup_servers, source_path, filename=None):
         df = pd.DataFrame(rows)
         df.to_excel(filename, index=False)
         print(f"Saved {len(df)} issues to {filename}")
+
+
+
+    # create cell colour based on status

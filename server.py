@@ -1,11 +1,53 @@
 from dataclasses import dataclass
 import pandas as pd
+import pdfplumber
+import re
 from bs4 import BeautifulSoup
+
+
+def set_server_status(servers, server_name, status):
+    for server in servers:
+        if server.name == server_name:
+            server.status = status
+            return
+
 
 @dataclass
 class Server:
     name: str
     status: str = None
+    SERVER_REGEX = re.compile(
+    r'^[sv]'                #physical/virtual
+    r'(hal|akh|mmh|nsh|glh|whg|prt|art)' #location
+    r'[0-3]'
+    r'[a-z]{3,}'
+    r'\d+'
+    r'(?:'
+        r'-\d{2}'          # cluster node
+        r'|ag\d{2}'        # availability group
+        r'|-ag\d{2}'       # availability group with hyphen
+    r')?$',
+    re.IGNORECASE
+    )
+    VALID_STATUSES = {
+        "Success",
+        "Warning",
+        "Error",
+        "Failed"
+    }
+
+    STATUS_REGEX = re.compile(
+        rf"({'|'.join(VALID_STATUSES)})",
+        re.IGNORECASE
+    )
+    @staticmethod
+    def normalize_name(name):
+        return str(name).strip().split(".")[0].lower()
+
+    @classmethod
+    def is_valid_server_name(cls, name):
+        return bool(cls.SERVER_REGEX.match(name))
+
 
     def __str__(self):
         return f"{self.name} - {self.status}"
@@ -17,7 +59,7 @@ class Server:
         }
 
     @classmethod
-    def save_staus_to_excel(cls, servers, filename):
+    def save_status_to_excel(cls, servers, filename):
 
         rows = [
             server.to_dict()
@@ -34,11 +76,11 @@ class RMCServer(Server):
     foundinreports: str = "Not Found"
 
     def to_dict(self):
-        return {
-            "Server Name": self.name,
-            "Status": self.status,
-            "Found In Reports": self.foundinreports
-        }
+        data = super().to_dict()
+
+        data["Found In Reports"] = self.foundinreports
+
+        return data
 
     @classmethod
     def load_rmc_servers(cls, file_path, sheet=0):
@@ -58,12 +100,12 @@ class RMCServer(Server):
             if pd.isna(server_name):
                 continue
 
-            server_name = str(server_name).strip()
+            server_name = Server.normalize_name(server_name)
 
-            server_name = server_name.split(".")[0]
-
-            if server_name == "Name0":
+            if server_name == "name0":
                 continue
+
+            #could use regex here to make this a more resilient part
 
             server = cls(
                 name=server_name,
@@ -76,125 +118,176 @@ class RMCServer(Server):
     
 @dataclass
 class VeeamServer(Server):
-    Thursday: str = None
-    Friday: str = None
-    Saturday: str = None
-    Sunday: str = None
-    Monday: str = None
-    Tuesday: str = None
-    Wednesday: str = None
+    
 
     @classmethod
-    def load_veeam_servers(cls, file_path, sheet):
-        df = pd.read_excel(
-            file_path,
-            sheet_name=sheet,
-            header=None
-        )
+    def load_veeam_servers(cls, pdf_path):
 
         servers = []
-        skipped_blank = 0
-        skipped_headers = 0
+        seen = set()
+        in_agent_section = False
 
-        print(f"Total rows in sheet: {len(df)}")
+        with pdfplumber.open(pdf_path) as pdf:
 
-        for _, row in df.iterrows():
+            for page in pdf.pages:
 
-            server_name = row[1]
+                text = page.extract_text()
 
-            if pd.isna(server_name):
-                skipped_blank += 1
-                continue
+                if not text:
+                    continue
 
-            server_name = str(server_name).strip()
+                for line in text.splitlines():
 
-            # Remove FQDN
-            server_name = server_name.split(".")[0]
+                    line = line.strip()
+                    if "AGT Protection Status" in line:
+                        print("reached AGENT SECTION statement")
+                        in_agent_section = True
+                        continue
 
-            if (
-                server_name == ""
-                or server_name == "VM Name"
-                or server_name.startswith("Job Name:")
-                or server_name.startswith("Backup Server:")
-                or server_name.startswith("Backup Job/Policy")
-                or "Backup Status" in server_name
-            ):
-                skipped_headers += 1
-                continue
+                    if not in_agent_section:
+                        parts = line.split()
+                        if not parts:
+                            continue
+                        if not line.lower().startswith("vprt"): #lets assume vprt is loc of backup server always
+                            continue
+                        # Need at least:
+                        # Backup Server | VM Name | Job Name | Location | Status columns
+                        if len(parts) < 3:
+                            continue
 
-            server = cls(
-                name=server_name,
-                Thursday=row[2],
-                Friday=row[3],
-                Saturday=row[4],
-                Sunday=row[5],
-                Monday=row[6],
-                Tuesday=row[7],
-                Wednesday=row[8]
-            )
+                        #usually no FQDN but lets play it safe
+                        server_name = Server.normalize_name(parts[1])
 
-            server.status = server.get_last_status()
-            servers.append(server)
 
+                        # Find all status values in the row
+                        statuses = Server.STATUS_REGEX.findall(line)
+
+                        # Latest status is the rightmost status column
+                        current_status = (
+                            statuses[-1].title()
+                            if statuses
+                            else "Unknown"
+                        )
+
+                        if server_name in seen:
+                            set_server_status(servers, server_name, current_status)
+                            continue
+
+                        seen.add(server_name)
+
+
+                        servers.append(
+                            cls(
+                                name=server_name,
+                                status=current_status
+                            )
+                        )
+                    else:
+                        if line.lower().startswith("computer"): 
+                            continue 
+                        parts = line.split()
+                                             # Need at least:
+                        # Computer Name (some will not have backup values)
+                        if len(parts) <=1:
+                            continue            
+                        #serve_name is computer name in reports
+                        server_name = Server.normalize_name(parts[0])
+                #__________Is the regex good enough to handle this????        
+
+                        if not Server.is_valid_server_name(server_name):
+                            continue
+
+
+
+
+                        # Find all status values in the row
+                        statuses = Server.STATUS_REGEX.findall(line)
+
+                        # Latest status is the rightmost status column
+                        current_status = (
+                            statuses[-1].title()
+                            if statuses
+                            else "Unknown"
+                        )
+
+
+                        if server_name in seen:
+                            set_server_status(servers, server_name, current_status)
+                            continue
+
+                        seen.add(server_name)
+
+
+                        servers.append(
+                            cls(
+                                name=server_name,
+                                status=current_status
+                            )
+                            )
+        print(f"Loaded {len(servers)} Veeam On Prem servers")
         return servers
 
-    def get_last_status(self):
-        valid_statuses = ["Success", "Warning", "Failed","Fail"]
 
-        days = [
-            self.Wednesday,
-            self.Tuesday,
-            self.Monday,
-            self.Sunday,
-            self.Saturday,
-            self.Friday,
-            self.Thursday
-        ]
+    @classmethod
+    def debug_pdf(cls, pdf_path, mode="regex"):
 
-        for status in days:
-            if str(status).strip() in valid_statuses:
-                return status
+        match mode.lower():
 
-        return None
+            case "regex":
 
+                with pdfplumber.open(pdf_path) as pdf:
+                    for page in pdf.pages[:1]:
 
+                        text = page.extract_text()
+
+                        if not text:
+                            continue
+
+                        for line in text.splitlines():
+
+                            m = re.match(
+                                r"^vprt.*?\s+([A-Z0-9_-]+)\s+",
+                                line
+                            )
+
+                            if m:
+                                print(m.group(1))
+
+            case "tables":
+
+                with pdfplumber.open(pdf_path) as pdf:
+
+                    print(f"Pages: {len(pdf.pages)}")
+
+                    for page_num, page in enumerate(pdf.pages, start=1):
+
+                        tables = page.extract_tables()
+
+                        print(f"Page {page_num}: found {len(tables)} tables")
+
+                        for table_num, table in enumerate(tables, start=1):
+
+                            if not table:
+                                continue
+
+                            print(f"Table {table_num} Header:")
+                            print(table[0])
+
+            case "text":
+
+                with pdfplumber.open(pdf_path) as pdf:
+
+                    print(pdf.pages[0].extract_text())
+
+            case _:
+
+                print(f"Unknown mode: {mode}")
 @dataclass
 class VeeamAZServer(Server):
     
     @classmethod
     def load_azure_servers(cls, file_path, sheet=1):
-        df = pd.read_excel(
-            file_path,
-            sheet_name=sheet,
-            header=None
-        )
-
-        servers = []
-        
-        for _, row in df.iterrows():
-
-            server_name = row[0]
-
-            if pd.isna(server_name):
-                continue
-
-            server_name = str(server_name).strip()
-
-            if (
-                server_name == ""
-                or server_name == "Instance Name"
-                or server_name.startswith("Protected Cloud Instances")
-                or server_name.startswith("Type:")
-            ):
-                continue
-
-            server = cls(
-                name=server_name,
-                status="Success"
-            )
-
-            servers.append(server)
-
+       
         return servers
 
 
@@ -232,12 +325,10 @@ class CCLServer(Server):
             if first_column == "SQL and Sybase Databases":
                 break
 
-            server_name = row.iloc[1]
+            server_name = Server.normalize_name(row.iloc[1])
 
             if pd.isna(server_name):
                 continue
-
-            server_name = str(server_name).strip()
 
             if not server_name:
                 continue
@@ -301,7 +392,9 @@ class BackupExecServer(Server):
             else:
                 continue
             #remove preceeding \\ from backupexec server name
-            server_name = server_name.lstrip("\\").upper()
+            server_name = Server.normalize_name(
+                    server_name.lstrip("\\")
+            )
             
             # Remove FQDN
             if "." in server_name:

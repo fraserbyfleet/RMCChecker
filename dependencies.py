@@ -5,7 +5,9 @@ REQUIRED_PACKAGES = {
     "pandas": "pandas",
     "openpyxl": "openpyxl",
     "lxml": "lxml",
-    "beautifulsoup4": "bs4"
+    "beautifulsoup4": "bs4",
+    "pdfplumber": "pdfplumber",
+    "re" : "re"
 }
 
 def ensure_package(package, module):

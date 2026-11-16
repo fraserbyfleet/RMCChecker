@@ -24,7 +24,7 @@ backupexec_reports = []
 
 
 rmc_servers = RMCServer.load_rmc_servers(rmcReport,sheet=0)
-if selected["VeeamOnPrem"]: onPremReport = select_file("Veeam on Premises backup report")
+if selected["VeeamOnPrem"]: onPremReport = select_file("Veeam on Premises backup report","PDF")
 if selected["VeeamAzure"]: azureReport = select_file("Veeam Azure backup report")
 if selected["CCL"]:cclReport = select_file("CCL backup report")
 
@@ -43,29 +43,34 @@ for retention in [20, 30, 50, 60, 90]:
 #load server objects and find issues---------------------------
 if onPremReport:
 
+    # veeam_on_prem_servers = (
+    #     VeeamServer.load_veeam_servers(onPremReport, 6)
+    #     + VeeamServer.load_veeam_servers(onPremReport, 2)
+    # )
+
+    # find_issues(
+    #     rmc_servers,
+    #     veeam_on_prem_servers,
+    #     onPremReport
+    # )
+    print("Onpremreport path|", onPremReport,"|end")
     veeam_on_prem_servers = (
-        VeeamServer.load_veeam_servers(onPremReport, 6)
-        + VeeamServer.load_veeam_servers(onPremReport, 2)
+        VeeamServer.load_veeam_servers(onPremReport)
     )
-
-    find_issues(
-        rmc_servers,
-        veeam_on_prem_servers,
-        onPremReport
-    )
-
+    Server.save_status_to_excel(veeam_on_prem_servers,"veeam_on_prem_servers_loaded.xlsx")
 if azureReport:
+    pass
 
-    veeam_azure_servers = (
-        VeeamAZServer.load_azure_servers(
-            azureReport
-        )
-    )
-    find_issues(
-            rmc_servers,
-            veeam_azure_servers,
-            azureReport
-        )
+    # veeam_azure_servers = (
+    #     VeeamAZServer.load_azure_servers(
+    #         azureReport
+    #     )
+    # )
+    # find_issues(
+    #         rmc_servers,
+    #         veeam_azure_servers,
+    #         azureReport
+    #     )
 
 
 if cclReport:
@@ -97,7 +102,7 @@ for report in backupexec_reports:
 
     backupexec_servers.extend(servers)
 
-RMCServer.save_staus_to_excel(
+RMCServer.save_status_to_excel(
     rmc_servers,
     "rmc_servers_status.xlsx"
 )

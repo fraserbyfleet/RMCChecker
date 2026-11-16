@@ -50,15 +50,16 @@ def select_sources():
     return result
 
 
-def select_file(name, html=False):
+def select_file(name, filetype="spreadsheet"):
+    types = {
+        "html": [("HTML Files", "*.htm *.html")],
+        "spreadsheet": [("Spreadsheet Files", "*.xlsx *.xls *.csv")],
+        "pdf": [("PDF Files", "*.pdf")],
+    }
 
     print(f"Select {name}")
 
     return filedialog.askopenfilename(
         title=name,
-        filetypes=[
-            ("HTML Files", "*.htm *.html")
-        ] if html else [
-            ("Spreadsheet Files", "*.xlsx *.xls *.csv")
-        ]
+        filetypes=types.get(filetype.lower(), [("All Files", "*.*")])
     )
