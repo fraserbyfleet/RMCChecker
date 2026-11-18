@@ -5,8 +5,10 @@ from tkinter import filedialog
 def select_sources():
 
     result = {
-        "VeeamOnPrem": False,
-        "VeeamAzure": False,
+        "VeeamOnPrem(PDF)": False,
+        "VeeamAzure(PDF)": False,
+        "VeeamAzure(CSV)": False,
+        "VeeamOnPrem(CSV)": False,
         "CCL": False,
         "BackupExec20": False,
         "BackupExec30": False,

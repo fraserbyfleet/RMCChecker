@@ -17,15 +17,22 @@ from reports import (find_issues)
 selected = select_sources()
 # RMC always required
 rmcReport = select_file("RMC patching required report")
-onPremReport = None
-azureReport = None
+onPremReportPDF = None
+azureReportPDF = None
+onPremVMReportCSV = None
+onPremAGTReportCSV = None
+azureReportCSV = None
 cclReport = None
 backupexec_reports = []
 
 
 rmc_servers = RMCServer.load_rmc_servers(rmcReport,sheet=0)
-if selected["VeeamOnPrem"]: onPremReport = select_file("Veeam on Premises backup report","PDF")
-if selected["VeeamAzure"]: azureReport = select_file("Veeam Azure backup report")
+if selected["VeeamOnPrem(PDF)"]: onPremReportPDF = select_file("Veeam on Premises backup report PDF","PDF")
+if selected["VeeamAzure(PDF)"]: azureReportPDF = select_file("Veeam Azure backup report PDF","PDF")
+if selected["VeeamOnPrem(CSV)"]: 
+    onPremVMReportCSV = select_file("Veeam on Premises VM backup report CSV")
+    onPremAGTReportCSV = select_file("Veeam on Premises AGT backup report CSV")
+if selected["VeeamAzure(CSV)"]: azureReportCSV = select_file("Veeam Azure backup report CSV")
 if selected["CCL"]:cclReport = select_file("CCL backup report")
 
 for retention in [20, 30, 50, 60, 90]:
@@ -41,37 +48,59 @@ for retention in [20, 30, 50, 60, 90]:
 #---------------------------------------------------------------
 
 #load server objects and find issues---------------------------
-if onPremReport:
+if onPremReportPDF:
 
-    # veeam_on_prem_servers = (
-    #     VeeamServer.load_veeam_servers(onPremReport, 6)
-    #     + VeeamServer.load_veeam_servers(onPremReport, 2)
-    # )
-
-    # find_issues(
-    #     rmc_servers,
-    #     veeam_on_prem_servers,
-    #     onPremReport
-    # )
-    print("Onpremreport path|", onPremReport,"|end")
     veeam_on_prem_servers = (
-        VeeamServer.load_veeam_servers(onPremReport)
+        VeeamServer.load_veeam_servers_PDF(onPremReportPDF)
     )
-    Server.save_status_to_excel(veeam_on_prem_servers,"veeam_on_prem_servers_loaded.xlsx")
-if azureReport:
-    pass
+    find_issues(
+        rmc_servers,
+        veeam_on_prem_servers,
+        onPremReportPDF
+    )
+    Server.save_status_to_excel(veeam_on_prem_servers,"veeam_onprem_servers_PDF_loaded.xlsx")
+if azureReportPDF:
 
-    # veeam_azure_servers = (
-    #     VeeamAZServer.load_azure_servers(
-    #         azureReport
-    #     )
-    # )
-    # find_issues(
-    #         rmc_servers,
-    #         veeam_azure_servers,
-    #         azureReport
-    #     )
+    veeam_azure_servers = (
+        VeeamAZServer.load_azure_servers_PDF(
+            azureReportPDF
+        )
+    )
+    find_issues(
+            rmc_servers,
+            veeam_azure_servers,
+            azureReportPDF
+        )
+    Server.save_status_to_excel(veeam_azure_servers,"veeam_Azure_servers_PDF_loaded.xlsx")
 
+if onPremVMReportCSV or onPremAGTReportCSV:
+
+    veeam_on_prem_servers = (
+        VeeamServer.load_veeam_servers_CSV(onPremVMReportCSV)
+        + VeeamServer.load_veeam_servers_CSV(onPremAGTReportCSV,"AGT")
+    )
+
+    #need to clean this up so actual 
+    find_issues(
+        rmc_servers,
+        veeam_on_prem_servers,
+        onPremVMReportCSV
+    )
+    Server.save_status_to_excel(veeam_on_prem_servers,"veeam_onprem_servers_CSV_loaded.xlsx")
+
+if azureReportCSV:
+
+    veeam_azure_servers = (
+        VeeamAZServer.load_azure_servers_CSV(
+            azureReportCSV
+        )
+    )
+    find_issues(
+            rmc_servers,
+            veeam_azure_servers,
+            azureReportCSV
+        )
+    Server.save_status_to_excel(veeam_azure_servers,"veeam_azure_servers_CSV_loaded.xlsx")
 
 if cclReport:
 
@@ -102,7 +131,7 @@ for report in backupexec_reports:
 
     backupexec_servers.extend(servers)
 
-RMCServer.save_status_to_excel(
+    Server.save_status_to_excel(
     rmc_servers,
     "rmc_servers_status.xlsx"
 )

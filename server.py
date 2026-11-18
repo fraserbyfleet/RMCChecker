@@ -3,6 +3,7 @@ import pandas as pd
 import pdfplumber
 import re
 from bs4 import BeautifulSoup
+from pathlib import Path
 
 
 def set_server_status(servers, server_name, status):
@@ -61,15 +62,21 @@ class Server:
     @classmethod
     def save_status_to_excel(cls, servers, filename):
 
+        debug_dir = Path.cwd() / "Debug_Outputs"
+        debug_dir.mkdir(exist_ok=True)
+
         rows = [
             server.to_dict()
             for server in servers
         ]
 
         df = pd.DataFrame(rows)
-        df.to_excel(filename, index=False)
 
-        print(f"Saved {len(df)} servers to {filename}")
+        output_file = debug_dir / filename
+
+        df.to_excel(output_file, index=False)
+
+        print(f"Saved {len(df)} servers to {output_file}")
 
 @dataclass
 class RMCServer(Server):
@@ -119,9 +126,71 @@ class RMCServer(Server):
 @dataclass
 class VeeamServer(Server):
     
+    @staticmethod
+    def get_latest_status(values):
+
+        for value in reversed(values.tolist()):
+
+            if pd.isna(value):
+                continue
+
+            value = str(value).strip()
+
+            if value.title() in Server.VALID_STATUSES:
+                return value.title()
+        return "Unknown"
 
     @classmethod
-    def load_veeam_servers(cls, pdf_path):
+    def load_veeam_servers_CSV(cls, csv_path, mode = None):
+        if mode:
+            mode = mode.upper()
+        servers = []
+        seen = set()
+
+        df = pd.read_csv(csv_path)
+
+        for _, row in df.iterrows():
+            if(mode == 'AGT'):
+                server_name = Server.normalize_name(row.iloc[0])
+            else:
+                server_name = Server.normalize_name(row.iloc[1])
+
+            if not Server.is_valid_server_name(server_name):
+                continue
+
+
+            current_status = "Unknown"
+
+            # AGT
+            if mode == "AGT":
+                current_status = cls.get_latest_status(row.iloc[1:])
+
+            else:
+                current_status = cls.get_latest_status(row.iloc[4:])
+
+            if server_name in seen:
+                set_server_status(
+                    servers,
+                    server_name,
+                    current_status
+                )
+                continue
+
+            seen.add(server_name)
+
+            servers.append(
+                cls(
+                    name=server_name,
+                    status=current_status
+                )
+            )
+
+        print(f"Loaded {len(servers)} Veeam CSV servers")
+        return servers
+
+
+    @classmethod
+    def load_veeam_servers_PDF(cls, pdf_path):
 
         servers = []
         seen = set()
@@ -140,7 +209,7 @@ class VeeamServer(Server):
 
                     line = line.strip()
                     if "AGT Protection Status" in line:
-                        print("reached AGENT SECTION statement")
+                        #print("reached AGENT SECTION statement")
                         in_agent_section = True
                         continue
 
@@ -156,6 +225,9 @@ class VeeamServer(Server):
                             continue
 
                         #usually no FQDN but lets play it safe
+                        #print(parts)  importan debug. Please leave
+                        
+
                         server_name = Server.normalize_name(parts[1])
 
 
@@ -197,9 +269,6 @@ class VeeamServer(Server):
                         if not Server.is_valid_server_name(server_name):
                             continue
 
-
-
-
                         # Find all status values in the row
                         statuses = Server.STATUS_REGEX.findall(line)
 
@@ -227,7 +296,7 @@ class VeeamServer(Server):
         print(f"Loaded {len(servers)} Veeam On Prem servers")
         return servers
 
-
+   
     @classmethod
     def debug_pdf(cls, pdf_path, mode="regex"):
 
@@ -282,14 +351,136 @@ class VeeamServer(Server):
             case _:
 
                 print(f"Unknown mode: {mode}")
+from dataclasses import dataclass
+import pandas as pd
+import pdfplumber
+
+
 @dataclass
 class VeeamAZServer(Server):
-    
+
+    AZURE_STATUS_MAP = {
+        "Protected": "Success",
+        "Outside RPO": "Failed",
+    }
+
     @classmethod
-    def load_azure_servers(cls, file_path, sheet=1):
-       
+    def get_azure_status(cls, veeam_status):
+        return cls.AZURE_STATUS_MAP.get(
+            veeam_status.strip(),
+            "Unknown"
+        )
+
+    @classmethod
+    def load_azure_servers_PDF(cls, pdf_path):
+        servers = []
+        seen = set()
+
+        with pdfplumber.open(pdf_path) as pdf:
+
+            for page in pdf.pages:
+                text = page.extract_text()
+
+                if not text:
+                    continue
+
+                for line in text.splitlines():
+                    parts = line.strip().split()
+
+                    if not parts:
+                        continue
+
+                    if not parts[0].lower().startswith("vprt"):
+                        continue
+
+                    if len(parts) < 4:
+                        continue
+
+                    server_name = Server.normalize_name(parts[1])
+
+                    if not Server.is_valid_server_name(server_name):
+                        continue
+
+                    # Protected
+                    if parts[-1] == "Protected":
+                        veeam_status = "Protected"
+
+                    # Outside RPO
+                    elif len(parts) >= 2 and " ".join(parts[-2:]) == "Outside RPO":
+                        veeam_status = "Outside RPO"
+
+                    else:
+                        veeam_status = parts[-1]
+
+                    status = cls.get_azure_status(
+                        veeam_status
+                    )
+
+                    if server_name in seen:
+                        Server.set_server_status(
+                            servers,
+                            server_name,
+                            status
+                        )
+                        continue
+
+                    seen.add(server_name)
+
+                    servers.append(
+                        cls(
+                            name=server_name,
+                            status=status
+                        )
+                    )
+
+        print(f"Loaded {len(servers)} Azure servers")
         return servers
 
+    @classmethod
+    def load_azure_servers_CSV(cls, azure_report_csv):
+        df = pd.read_csv(azure_report_csv)
+
+        df["Last Protection Date"] = pd.to_datetime(
+            df["Last Protection Date"],
+            dayfirst=True,
+            errors="coerce"
+        )
+
+        df = df.sort_values(
+            by="Last Protection Date",
+            ascending=False,
+            na_position="last"
+        )
+
+        df = df.drop_duplicates(
+            subset=["Instance Name"],
+            keep="first"
+        )
+
+        servers = []
+
+        for _, row in df.iterrows():
+
+            server_name = Server.normalize_name(
+                str(row["Instance Name"]).strip()
+            )
+
+            if not Server.is_valid_server_name(server_name):
+                continue
+
+            status = cls.get_azure_status(
+                str(row["Within RPO"])
+            )
+
+            servers.append(
+                cls(
+                    name=server_name,
+                    status=status
+                )
+            )
+
+        print(f"Loaded {len(servers)} Azure servers")
+        return servers
 
 @dataclass
 class CCLServer(Server):
