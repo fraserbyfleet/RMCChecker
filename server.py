@@ -48,6 +48,7 @@ class Server:
         rf"({'|'.join(VALID_STATUSES)})",
         re.IGNORECASE
     )
+
     @staticmethod
     def normalize_name(name):
         return str(name).strip().split(".")[0].lower()
@@ -55,7 +56,6 @@ class Server:
     @classmethod
     def is_valid_server_name(cls, name):
         return bool(cls.SERVER_REGEX.match(name))
-
 
     def __str__(self):
         return f"{self.name} - {self.status}"

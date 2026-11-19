@@ -1,3 +1,17 @@
+'''
+Need to create:
+
+-verbose mode
+-try catch exception handling
+-regex to auto select file (experimental mode)
+
+
+'''
+
+
+
+
+
 #import all required dependencies not in default Python library using install_dependencies() ----------------------------------
 from dependencies import install_dependencies
 install_dependencies()

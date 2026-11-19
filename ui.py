@@ -2,77 +2,85 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 
-disabled_reports = {"Azure (PDF)"} #disabled as more dev work required
+REPORTS = {
+    "VeeamOnPrem(PDF)": {
+        "text": "On-Prem (PDF)",
+        "group": "Veeam",
+        "enabled": True,
+    },
+    "VeeamOnPrem(CSV)": {
+        "text": "On-Prem (CSV)",
+        "group": "Veeam",
+        "enabled": True,
+    },
+    "VeeamAzure(PDF)": {
+        "text": "Azure (PDF)",
+        "group": "Veeam",
+        "enabled": False,
+    },
+    "VeeamAzure(CSV)": {
+        "text": "Azure (CSV)",
+        "group": "Veeam",
+        "enabled": True,
+    },
+    "CCL": {
+        "text": "CCL",
+        "group": "CCL",
+        "enabled": True,
+    },
+    "BackupExec20": {
+        "text": "20 Day",
+        "group": "Backup Exec",
+        "enabled": True,
+    },
+    "BackupExec30": {
+        "text": "30 Day",
+        "group": "Backup Exec",
+        "enabled": True,
+    },
+    "BackupExec50": {
+        "text": "50 Day",
+        "group": "Backup Exec",
+        "enabled": True,
+    },
+    "BackupExec60": {
+        "text": "60 Day",
+        "group": "Backup Exec",
+        "enabled": True,
+    },
+    "BackupExec90": {
+        "text": "90 Day",
+        "group": "Backup Exec",
+        "enabled": True,
+    },
+}
+
 
 def center_window(window, width, height):
-    #Centre a window on the screen.
 
     window.update_idletasks()
 
-    screen_width = window.winfo_screenwidth()
-    screen_height = window.winfo_screenheight()
+    x = (window.winfo_screenwidth() - width) // 2
+    y = (window.winfo_screenheight() - height) // 2
 
-    x = (screen_width - width) // 2
-    y = (screen_height - height) // 2
-
-    window.geometry(f"{width}x{height}+{x}+{y}")
+    window.geometry(
+        f"{width}x{height}+{x}+{y}"
+    )
 
 
 def select_sources():
 
-    report_groups = {
-        "Veeam": [
-            "On-Prem (PDF)",
-            "On-Prem (CSV)",
-            "Azure (PDF)",
-            "Azure (CSV)",
-        ],
-        "CCL": [
-            "CCL"
-        ],
-        "Backup Exec": [
-            "20 Day",
-            "30 Day",
-            "50 Day",
-            "60 Day",
-            "90 Day",
-        ]
-    }
-
     result = {
-        "VeeamOnPrem(PDF)": False,
-        "VeeamOnPrem(CSV)": False,
-        "VeeamAzure(PDF)": False,
-        "VeeamAzure(CSV)": False,
-        "CCL": False,
-        "BackupExec20": False,
-        "BackupExec30": False,
-        "BackupExec50": False,
-        "BackupExec60": False,
-        "BackupExec90": False
-    }
-
-    checkbox_map = {
-        "On-Prem (PDF)": "VeeamOnPrem(PDF)",
-        "On-Prem (CSV)": "VeeamOnPrem(CSV)",
-        "Azure (PDF)": "VeeamAzure(PDF)",
-        "Azure (CSV)": "VeeamAzure(CSV)",
-        "CCL": "CCL",
-        "20 Day": "BackupExec20",
-        "30 Day": "BackupExec30",
-        "50 Day": "BackupExec50",
-        "60 Day": "BackupExec60",
-        "90 Day": "BackupExec90",
+        key: False
+        for key in REPORTS
     }
 
     window = tk.Tk()
+
     window.title("RMC Checker")
     window.resizable(False, False)
 
     center_window(window, 450, 550)
-
-    style = ttk.Style()
-    style.theme_use("vista")   # nice Windows theme
 
     main_frame = ttk.Frame(
         window,
@@ -95,13 +103,18 @@ def select_sources():
 
     variables = {}
 
+    select_all_var = tk.BooleanVar()
+
     def toggle_all():
+
         state = select_all_var.get()
 
-        for var in variables.values():
-            var.set(state)
+        for key, var in variables.items():
 
-    select_all_var = tk.BooleanVar()
+            if not REPORTS[key]["enabled"]:
+                continue
+
+            var.set(state)
 
     ttk.Checkbutton(
         main_frame,
@@ -113,11 +126,20 @@ def select_sources():
         pady=(0, 10)
     )
 
-    for group_name, reports in report_groups.items():
+    groups = {}
+
+    for key, config in REPORTS.items():
+
+        groups.setdefault(
+            config["group"],
+            []
+        ).append(key)
+
+    for group_name, report_keys in groups.items():
 
         frame = ttk.LabelFrame(
             main_frame,
-            text=f" {group_name} ",
+            text=group_name,
             padding=10
         )
 
@@ -126,17 +148,26 @@ def select_sources():
             pady=5
         )
 
-        for report in reports:
+        for key in report_keys:
 
-            key = checkbox_map[report]
+            config = REPORTS[key]
 
             variables[key] = tk.BooleanVar()
 
+            label = config["text"]
+
+            if not config["enabled"]:
+                label += " (Work in Progress)"
+
             ttk.Checkbutton(
                 frame,
-                text=report if report not in disabled_reports else f"{report} (Work in Progress)", #lock stuff I am working on
+                text=label,
                 variable=variables[key],
-                state="disabled" if report in disabled_reports else "normal"
+                state=(
+                    "normal"
+                    if config["enabled"]
+                    else "disabled"
+                )
             ).pack(
                 anchor="w",
                 padx=5,
@@ -145,15 +176,18 @@ def select_sources():
 
     def submit():
 
-        for key in result:
+        for key in variables:
             result[key] = variables[key].get()
-        if any(result.values()):
-            window.destroy()
-        else:
+
+        if not any(result.values()):
             messagebox.showwarning(
-            "No Reports Selected",
-            "Please select at least one report before continuing."
-        )
+                "No Reports Selected",
+                "Please select at least one report."
+            )
+            return
+
+        window.destroy()
+
     ttk.Button(
         main_frame,
         text="Load Selected Reports",
