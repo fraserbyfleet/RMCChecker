@@ -1,6 +1,7 @@
 import sys
 import subprocess
 
+
 REQUIRED_PACKAGES = {
     "pandas": "pandas",
     "openpyxl": "openpyxl",

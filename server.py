@@ -20,6 +20,8 @@ class Server:
     name: str
     status: str = None
     file_path: str = None
+    
+    #currently not used as many servers dont follow IS naming standards SOP. Could be useful at some point
     SERVER_REGEX = re.compile(
     r'^[sv]'                #physical/virtual
     r'(hal|akh|mmh|nsh|glh|whg|prt|art)' #location
@@ -33,6 +35,7 @@ class Server:
     r')?$',
     re.IGNORECASE
     )
+    
     VALID_STATUSES = {
         "Success",
         "Warning",
@@ -40,6 +43,7 @@ class Server:
         "Failed"
     }
 
+    
     STATUS_REGEX = re.compile(
         rf"({'|'.join(VALID_STATUSES)})",
         re.IGNORECASE

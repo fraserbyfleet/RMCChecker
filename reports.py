@@ -2,7 +2,6 @@ import pandas as pd
 from server import *
 
 
-
 def find_issues(rmc_servers, backedup_servers, source_path, filename=None):
 
     find_backedup_servers = {

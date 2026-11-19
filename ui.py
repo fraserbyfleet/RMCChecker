@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
+
 disabled_reports = {"Azure (PDF)"} #disabled as more dev work required
 
 def center_window(window, width, height):

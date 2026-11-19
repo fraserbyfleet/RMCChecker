@@ -2,14 +2,7 @@
 from dependencies import install_dependencies
 install_dependencies()
 from ui import select_sources, select_file
-from server import (
-    Server,
-    RMCServer,
-    VeeamServer,
-    VeeamAZServer,
-    CCLServer,
-    BackupExecServer
-)
+from server import *
 from reports import (find_issues)
 #--------------------------------------------------------------------------------------------------------------------------------
 
