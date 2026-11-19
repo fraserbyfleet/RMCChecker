@@ -1,14 +1,11 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 
-disabled_reports = {
-    "Azure (PDF)"
-}
+disabled_reports = {"Azure (PDF)"} #disabled as more dev work required
 
 def center_window(window, width, height):
-    """
-    Centre a window on the screen.
-    """
+    #Centre a window on the screen.
+
     window.update_idletasks()
 
     screen_width = window.winfo_screenwidth()
@@ -68,11 +65,10 @@ def select_sources():
     }
 
     window = tk.Tk()
-
     window.title("RMC Checker")
     window.resizable(False, False)
 
-    center_window(window, 450, 600)
+    center_window(window, 450, 550)
 
     style = ttk.Style()
     style.theme_use("vista")   # nice Windows theme
@@ -137,7 +133,7 @@ def select_sources():
 
             ttk.Checkbutton(
                 frame,
-                text=report if report not in disabled_reports else f"{report} (Work in Progress)",
+                text=report if report not in disabled_reports else f"{report} (Work in Progress)", #lock stuff I am working on
                 variable=variables[key],
                 state="disabled" if report in disabled_reports else "normal"
             ).pack(
@@ -150,8 +146,13 @@ def select_sources():
 
         for key in result:
             result[key] = variables[key].get()
-        window.destroy()
-
+        if any(result.values()):
+            window.destroy()
+        else:
+            messagebox.showwarning(
+            "No Reports Selected",
+            "Please select at least one report before continuing."
+        )
     ttk.Button(
         main_frame,
         text="Load Selected Reports",
