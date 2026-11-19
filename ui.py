@@ -1,6 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-
+from tkinter import filedialog, messagebox
+import ttkbootstrap as ttk
+from PIL import Image, ImageTk
 
 REPORTS = {
     "VeeamOnPrem(PDF)": {
@@ -75,16 +76,18 @@ def select_sources():
         for key in REPORTS
     }
 
-    window = tk.Tk()
+    window = ttk.Window(
+        title="RMC Checker",
+        themename="solar"  # dark mode
+    )
 
-    window.title("RMC Checker")
     window.resizable(False, False)
 
-    center_window(window, 450, 550)
+    center_window(window, 500, 700)
 
     main_frame = ttk.Frame(
         window,
-        padding=15
+        padding=20
     )
 
     main_frame.pack(
@@ -92,13 +95,53 @@ def select_sources():
         expand=True
     )
 
+    header_frame = ttk.Frame(main_frame)
+    header_frame.pack(
+        fill="x",
+        pady=(0, 15)
+    )
+
+    # Left side
+    title_frame = ttk.Frame(header_frame)
+    title_frame.pack(
+        side="left",
+        fill="x",
+        expand=True
+    )
+
     ttk.Label(
-        main_frame,
-        text="Select Reports To Load",
-        font=("Segoe UI", 12, "bold")
+        title_frame,
+        text="RMC Checker",
+        font=("Segoe UI", 16, "bold")
     ).pack(
-        anchor="w",
-        pady=(0, 10)
+        anchor="w"
+    )
+
+    ttk.Label(
+        title_frame,
+        text="Backup Validation Tool",
+        bootstyle="secondary"
+    ).pack(
+        anchor="w"
+    )
+
+    # Right side image
+    img = Image.open("Te-Whatu-Ora-Logo.png")
+    img.thumbnail((250, 80))
+
+    logo = ImageTk.PhotoImage(img)
+
+    logo_label = ttk.Label(
+        header_frame,
+        image=logo
+    )
+
+    # Keep reference or image disappears
+    logo_label.image = logo
+
+    logo_label.pack(
+        side="right",
+        padx=(10, 0)
     )
 
     variables = {}
@@ -120,10 +163,11 @@ def select_sources():
         main_frame,
         text="Select All",
         variable=select_all_var,
-        command=toggle_all
+        command=toggle_all,
+        bootstyle="round-toggle"
     ).pack(
         anchor="w",
-        pady=(0, 10)
+        pady=(0, 15)
     )
 
     groups = {}
@@ -139,13 +183,14 @@ def select_sources():
 
         frame = ttk.LabelFrame(
             main_frame,
-            text=group_name,
-            padding=10
+            text=f" {group_name} ",
+            padding=12,
+            bootstyle="info"
         )
 
         frame.pack(
             fill="x",
-            pady=5
+            pady=6
         )
 
         for key in report_keys:
@@ -157,7 +202,7 @@ def select_sources():
             label = config["text"]
 
             if not config["enabled"]:
-                label += " (Work in Progress)"
+                label += " 🚧 Work In Progress"
 
             ttk.Checkbutton(
                 frame,
@@ -171,7 +216,7 @@ def select_sources():
             ).pack(
                 anchor="w",
                 padx=5,
-                pady=2
+                pady=3
             )
 
     def submit():
@@ -190,11 +235,12 @@ def select_sources():
 
     ttk.Button(
         main_frame,
-        text="Load Selected Reports",
-        command=submit
+        text="▶ Load Selected Reports",
+        command=submit,
+        bootstyle="success"
     ).pack(
         fill="x",
-        pady=(15, 0)
+        pady=(20, 0)
     )
 
     window.mainloop()
@@ -217,7 +263,7 @@ def select_file(name, filetype="spreadsheet"):
         "pdf": [
             ("PDF Files", "*.pdf")
         ],
-        "csv":[
+        "csv": [
             ("CSV Files", "*.csv")
         ]
     }
