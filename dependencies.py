@@ -7,7 +7,6 @@ REQUIRED_PACKAGES = {
     "lxml": "lxml",
     "beautifulsoup4": "bs4",
     "pdfplumber": "pdfplumber",
-    "re" : "re"
 }
 
 def ensure_package(package, module):

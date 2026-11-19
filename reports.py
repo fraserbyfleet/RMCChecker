@@ -22,7 +22,7 @@ def find_issues(rmc_servers, backedup_servers, source_path, filename=None):
         if backedUpServers is None:
             continue
 
-        rmc_server.foundinreports = source_path
+        rmc_server.file_path = backedUpServers.file_path
         rmc_server.status = backedUpServers.status
         # Server found but backup not successful
         if backedUpServers.status != "Success":
@@ -30,7 +30,7 @@ def find_issues(rmc_servers, backedup_servers, source_path, filename=None):
             rows.append({
                 "Server Name": rmc_server.name,
                 "Backup Status": backedUpServers.status,
-                "Found in report": rmc_server.foundinreports
+                "Found in report": rmc_server.file_path
             })
 
     if filename is not None:

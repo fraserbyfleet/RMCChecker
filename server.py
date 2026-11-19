@@ -4,6 +4,8 @@ import pdfplumber
 import re
 from bs4 import BeautifulSoup
 from pathlib import Path
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 
 
 def set_server_status(servers, server_name, status):
@@ -17,6 +19,7 @@ def set_server_status(servers, server_name, status):
 class Server:
     name: str
     status: str = None
+    file_path: str = None
     SERVER_REGEX = re.compile(
     r'^[sv]'                #physical/virtual
     r'(hal|akh|mmh|nsh|glh|whg|prt|art)' #location
@@ -56,14 +59,19 @@ class Server:
     def to_dict(self):
         return {
             "Server Name": self.name,
-            "Status": self.status
+            "Status": self.status,
+            "File Path": self.file_path,
         }
 
     @classmethod
-    def save_status_to_excel(cls, servers, filename):
+    def save_status_to_excel(cls, servers, filename, output="debug"):
 
-        debug_dir = Path.cwd() / "Debug_Outputs"
-        debug_dir.mkdir(exist_ok=True)
+        if output == "debug":
+            output_dir = Path.cwd() / "Servers Loaded"
+        else:
+            output_dir = Path.cwd() / "RMC Report"
+
+        output_dir.mkdir(exist_ok=True)
 
         rows = [
             server.to_dict()
@@ -72,28 +80,67 @@ class Server:
 
         df = pd.DataFrame(rows)
 
-        output_file = debug_dir / filename
+        output_file = output_dir / filename
 
         df.to_excel(output_file, index=False)
 
+        workbook = load_workbook(output_file)
+        worksheet = workbook.active
+
+        # Find Status column
+        status_col = None
+
+        for cell in worksheet[1]:
+            if cell.value in ("Status", "Backup Status"):
+                status_col = cell.column
+                break
+
+        # Colour Status cells
+        if status_col is not None:
+
+            green_fill = PatternFill(
+                fill_type="solid",
+                start_color="C6EFCE"
+            )
+
+            orange_fill = PatternFill(
+                fill_type="solid",
+                start_color="FFEB9C"
+            )
+
+            red_fill = PatternFill(
+                fill_type="solid",
+                start_color="FFC7CE"
+            )
+
+            for row in range(2, worksheet.max_row + 1):
+
+                cell = worksheet.cell(
+                    row=row,
+                    column=status_col
+                )
+
+                if cell.value == "Success":
+                    cell.fill = green_fill
+
+                elif cell.value == "Warning":
+                    cell.fill = orange_fill
+
+                elif cell.value in ("Failed", "Error"):
+                    cell.fill = red_fill
+
+        workbook.save(output_file)
         print(f"Saved {len(df)} servers to {output_file}")
 
 @dataclass
 class RMCServer(Server):
-    foundinreports: str = "Not Found"
-
-    def to_dict(self):
-        data = super().to_dict()
-
-        data["Found In Reports"] = self.foundinreports
-
-        return data
+    file_path: str = "Not Found"
 
     @classmethod
-    def load_rmc_servers(cls, file_path, sheet=0):
+    def load_rmc_servers(cls, rmc_file_path, sheet=0):
 
         df = pd.read_excel(
-            file_path,
+            rmc_file_path,
             sheet_name=sheet,
             header=None
         )
@@ -116,7 +163,8 @@ class RMCServer(Server):
 
             server = cls(
                 name=server_name,
-                status="unknown"
+                status="Unknown",
+                file_path = rmc_file_path
             )
 
             servers.append(server)
@@ -155,8 +203,8 @@ class VeeamServer(Server):
             else:
                 server_name = Server.normalize_name(row.iloc[1])
 
-            if not Server.is_valid_server_name(server_name):
-                continue
+            # if not Server.is_valid_server_name(server_name):
+            #     continue
 
 
             current_status = "Unknown"
@@ -181,7 +229,8 @@ class VeeamServer(Server):
             servers.append(
                 cls(
                     name=server_name,
-                    status=current_status
+                    status=current_status,
+                    file_path=csv_path
                 )
             )
 
@@ -251,7 +300,8 @@ class VeeamServer(Server):
                         servers.append(
                             cls(
                                 name=server_name,
-                                status=current_status
+                                status=current_status,
+                                file_path=pdf_path
                             )
                         )
                     else:
@@ -266,8 +316,8 @@ class VeeamServer(Server):
                         server_name = Server.normalize_name(parts[0])
                 #__________Is the regex good enough to handle this????        
 
-                        if not Server.is_valid_server_name(server_name):
-                            continue
+                        # if not Server.is_valid_server_name(server_name):
+                        #     continue
 
                         # Find all status values in the row
                         statuses = Server.STATUS_REGEX.findall(line)
@@ -290,7 +340,8 @@ class VeeamServer(Server):
                         servers.append(
                             cls(
                                 name=server_name,
-                                status=current_status
+                                status=current_status,
+                                file_path=pdf_path
                             )
                             )
         print(f"Loaded {len(servers)} Veeam On Prem servers")
@@ -351,10 +402,6 @@ class VeeamServer(Server):
             case _:
 
                 print(f"Unknown mode: {mode}")
-from dataclasses import dataclass
-import pandas as pd
-import pdfplumber
-
 
 @dataclass
 class VeeamAZServer(Server):
@@ -386,7 +433,7 @@ class VeeamAZServer(Server):
 
                 for line in text.splitlines():
                     parts = line.strip().split()
-
+                    #print(parts)
                     if not parts:
                         continue
 
@@ -397,9 +444,10 @@ class VeeamAZServer(Server):
                         continue
 
                     server_name = Server.normalize_name(parts[1])
-
-                    if not Server.is_valid_server_name(server_name):
-                        continue
+                    #print(server_name)
+                    
+                    #if not Server.is_valid_server_name(server_name):
+                    #    continue
 
                     # Protected
                     if parts[-1] == "Protected":
@@ -417,7 +465,7 @@ class VeeamAZServer(Server):
                     )
 
                     if server_name in seen:
-                        Server.set_server_status(
+                        set_server_status(
                             servers,
                             server_name,
                             status
@@ -429,7 +477,8 @@ class VeeamAZServer(Server):
                     servers.append(
                         cls(
                             name=server_name,
-                            status=status
+                            status=status,
+                            file_path=pdf_path
                         )
                     )
 
@@ -465,8 +514,8 @@ class VeeamAZServer(Server):
                 str(row["Instance Name"]).strip()
             )
 
-            if not Server.is_valid_server_name(server_name):
-                continue
+            #if not Server.is_valid_server_name(server_name):
+            #    continue
 
             status = cls.get_azure_status(
                 str(row["Within RPO"])
@@ -475,12 +524,67 @@ class VeeamAZServer(Server):
             servers.append(
                 cls(
                     name=server_name,
-                    status=status
+                    status=status,
+                    file_path=azure_report_csv
                 )
             )
 
         print(f"Loaded {len(servers)} Azure servers")
         return servers
+    @classmethod
+    def debug_pdf(cls, pdf_path, mode="regex"):
+
+        match mode.lower():
+
+            case "regex":
+
+                with pdfplumber.open(pdf_path) as pdf:
+                    for page in pdf.pages[:1]:
+
+                        text = page.extract_text()
+
+                        if not text:
+                            continue
+
+                        for line in text.splitlines():
+
+                            m = re.match(
+                                r"^vprt.*?\s+([A-Z0-9_-]+)\s+",
+                                line
+                            )
+
+                            if m:
+                                print(m.group(1))
+
+            case "tables":
+
+                with pdfplumber.open(pdf_path) as pdf:
+
+                    print(f"Pages: {len(pdf.pages)}")
+
+                    for page_num, page in enumerate(pdf.pages, start=1):
+
+                        tables = page.extract_tables()
+
+                        print(f"Page {page_num}: found {len(tables)} tables")
+
+                        for table_num, table in enumerate(tables, start=1):
+
+                            if not table:
+                                continue
+
+                            print(f"Table {table_num} Header:")
+                            print(table[0])
+
+            case "text":
+
+                with pdfplumber.open(pdf_path) as pdf:
+
+                    print(pdf.pages[0].extract_text())
+
+            case _:
+
+                print(f"Unknown mode: {mode}")
 
 @dataclass
 class CCLServer(Server):
@@ -540,7 +644,7 @@ class CCLServer(Server):
                 k_value = 0
 
             server.status = "Failed" if j_value != 0 or k_value != 0 else "Success"
-
+            server.file_path = file_path
             servers.append(server)
 
         print(f"Loaded {len(servers)} CCL servers")
@@ -597,6 +701,7 @@ class BackupExecServer(Server):
                 servers[server_name] = cls(server_name)
 
             servers[server_name].status = status
+            servers[server_name].file_path = html_file
 
         result = list(servers.values())
 
