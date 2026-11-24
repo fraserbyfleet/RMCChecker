@@ -4,7 +4,8 @@ Need to create:
 -verbose mode
 -try catch exception handling
 -regex to auto select file (experimental mode)
-
+-regex mode
+-cherwell dump load (can create usefuls reports out of this)
 
 '''
 
@@ -47,7 +48,7 @@ for retention in [20, 30, 50, 60, 90]:
         backupexec_reports.append(
             select_file(
                 f"BackupExec backup report {retention}",
-                html=True
+                "HTML"
             )
         )
 
