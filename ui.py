@@ -30,27 +30,27 @@ REPORTS = {
         "enabled": True,
     },
     "BackupExec20": {
-        "text": "20 Day",
+        "text": "Caso 20",
         "group": "Backup Exec",
         "enabled": True,
     },
     "BackupExec30": {
-        "text": "30 Day",
+        "text": "Caso 30",
         "group": "Backup Exec",
         "enabled": True,
     },
     "BackupExec50": {
-        "text": "50 Day",
+        "text": "Caso 50",
         "group": "Backup Exec",
         "enabled": True,
     },
     "BackupExec60": {
-        "text": "60 Day",
+        "text": "Caso 6-",
         "group": "Backup Exec",
         "enabled": True,
     },
     "BackupExec90": {
-        "text": "90 Day",
+        "text": "Caso 90",
         "group": "Backup Exec",
         "enabled": True,
     },
